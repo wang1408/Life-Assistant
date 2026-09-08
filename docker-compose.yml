@@ -1,0 +1,45 @@
+services:
+  mysql:
+    image: mysql:8.0
+    environment:
+      MYSQL_DATABASE: life_assistant
+      MYSQL_USER: life
+      MYSQL_PASSWORD: life
+      MYSQL_ROOT_PASSWORD: root
+    ports: ["3306:3306"]
+    volumes: ["mysql_data:/var/lib/mysql"]
+  redis:
+    image: redis:7-alpine
+    ports: ["6379:6379"]
+  api:
+    build: ./backend
+    env_file: .env
+    environment:
+      DATABASE_URL: mysql+pymysql://life:life@mysql:3306/life_assistant
+      REDIS_URL: redis://redis:6379/0
+      REMINDER_LOCAL_RUNNER: "false"
+    ports: ["8000:8000"]
+    depends_on: [mysql, redis]
+    command: uvicorn app.main:app --host 0.0.0.0 --port 8000
+  worker:
+    build: ./backend
+    env_file: .env
+    environment:
+      DATABASE_URL: mysql+pymysql://life:life@mysql:3306/life_assistant
+      REDIS_URL: redis://redis:6379/0
+    depends_on: [mysql, redis]
+    command: celery -A app.core.celery_app.celery_app worker --loglevel=INFO
+  scheduler:
+    build: ./backend
+    env_file: .env
+    environment:
+      DATABASE_URL: mysql+pymysql://life:life@mysql:3306/life_assistant
+      REDIS_URL: redis://redis:6379/0
+    depends_on: [mysql, redis]
+    command: celery -A app.core.celery_app.celery_app beat --loglevel=INFO
+  web:
+    build: ./frontend
+    ports: ["5173:80"]
+    depends_on: [api]
+volumes:
+  mysql_data:
